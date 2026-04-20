@@ -38,6 +38,19 @@ export interface ResolvedConfig {
   quiet: boolean;
 }
 
+export interface SnapshotFile {
+  relativePath: string;
+  mode: string;
+  buffer?: Buffer;
+}
+
+export interface SnapshotReader {
+  sourceCommit: string;
+  sourceBranch?: string;
+  listFiles(): Promise<SnapshotFile[]>;
+  readBlob(relativePath: string): Promise<Buffer>;
+}
+
 export interface FrontmatterParseResult {
   hasFrontmatter: boolean;
   publicValue?: boolean;

@@ -3,14 +3,9 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { tmpdir } from 'node:os';
 
 import { parseFrontmatter } from './frontmatter.ts';
-import {
-  getCurrentBranch,
-  listCommitTree,
-  readCommitFile,
-  resolveCommit,
-  runGit,
-} from './git.ts';
+import { runGit } from './git.ts';
 import { parseMarkdownReferences, type MarkdownReferenceSyntax } from './references.ts';
+import { createGitSnapshotReader } from './snapshot-reader.ts';
 import type {
   BrokenLink,
   CheckResult,
@@ -19,6 +14,7 @@ import type {
   PublishResult,
   ResolvedConfig,
   SensitiveMatch,
+  SnapshotReader,
   SyncMetadata,
 } from './types.ts';
 import {
@@ -70,6 +66,7 @@ interface ReferenceResolution {
 interface CheckOptions {
   sourceCommit?: string;
   sourceBranch?: string;
+  snapshotReader?: SnapshotReader;
   toolVersion: string;
 }
 
@@ -191,9 +188,15 @@ async function buildPublishPlan(
   config: ResolvedConfig,
   options: CheckOptions,
 ): Promise<PublishPlan> {
-  const sourceCommit = await resolveCommit(config.repoRoot, options.sourceCommit ?? 'HEAD');
-  const sourceBranch = options.sourceBranch ?? (await getCurrentBranch(config.repoRoot));
-  const sourceTree = await collectSourceTree(config.repoRoot, sourceCommit);
+  const snapshotReader =
+    options.snapshotReader ??
+    (await createGitSnapshotReader(config.repoRoot, {
+      sourceCommit: options.sourceCommit,
+      sourceBranch: options.sourceBranch,
+    }));
+  const sourceCommit = snapshotReader.sourceCommit;
+  const sourceBranch = snapshotReader.sourceBranch;
+  const sourceTree = await collectSourceTree(snapshotReader);
   const warnings = [...sourceTree.warnings];
 
   for (const candidate of sourceTree.markdownByPath.values()) {
@@ -247,7 +250,7 @@ async function buildPublishPlan(
     publishFiles.push({
       relativePath: entry.relativePath,
       kind: 'attachment',
-      buffer: entry.buffer ?? (await readCommitFile(config.repoRoot, sourceCommit, entry.relativePath)),
+      buffer: entry.buffer ?? (await snapshotReader.readBlob(entry.relativePath)),
     });
   }
 
@@ -286,25 +289,20 @@ async function buildPublishPlan(
   };
 }
 
-async function collectSourceTree(repoRoot: string, sourceCommit: string): Promise<SnapshotTree> {
+async function collectSourceTree(snapshotReader: SnapshotReader): Promise<SnapshotTree> {
   const markdownByPath = new Map<string, MarkdownCandidate>();
   const fileByPath = new Map<string, SnapshotFileEntry>();
   const readmeByDirectory = new Map<string, string>();
   const warnings: string[] = [];
-  const entries = await listCommitTree(repoRoot, sourceCommit);
+  const entries = await snapshotReader.listFiles();
 
   for (const entry of entries) {
     if (entry.mode === '120000') {
-      warnings.push(`Skipping tracked symlink: ${entry.path}`);
+      warnings.push(`Skipping tracked symlink: ${entry.relativePath}`);
       continue;
     }
 
-    if (entry.type !== 'blob') {
-      warnings.push(`Skipping unsupported git entry: ${entry.path}`);
-      continue;
-    }
-
-    const relativePath = normalizeRelativePosix(entry.path);
+    const relativePath = normalizeRelativePosix(entry.relativePath);
     if (!relativePath) {
       continue;
     }
@@ -322,7 +320,7 @@ async function collectSourceTree(repoRoot: string, sourceCommit: string): Promis
       continue;
     }
 
-    const buffer = await readCommitFile(repoRoot, sourceCommit, relativePath);
+    const buffer = await snapshotReader.readBlob(relativePath);
     const content = buffer.toString('utf8');
     const parsed = parseFrontmatter(content);
     const markdownCandidate: MarkdownCandidate = {
