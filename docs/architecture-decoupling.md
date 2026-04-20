@@ -1,6 +1,6 @@
 # Architecture & decoupling — should we add a thin seam?
 
-Status: proposal / analysis.
+Status: implemented (thin seam added via `SnapshotReader`).
 Audience: anyone considering where to add a boundary for test-driven development.
 
 ## The question
@@ -14,10 +14,10 @@ development easier?_
 **Yes — one seam is worth adding, and it's conceptual, not a rewrite.**
 
 The seam is the boundary between "where does data come from" (the source
-snapshot) and "how do we decide what to publish" (the filter rules). Today
-these are tangled in `core.ts` via direct calls to `git.ts`. Separating them
-gives us two layers that can be tested independently, without changing any
-public CLI behavior.
+snapshot) and "how do we decide what to publish" (the filter rules). `core.ts`
+now consumes a `SnapshotReader` and no longer directly calls git tree/blob APIs
+for snapshot reads. This keeps CLI behavior unchanged while enabling fast
+in-memory unit tests.
 
 **Do not** add additional layers (service/repository/adapter stacks, DI
 containers, or multi-interface facades). The tool is small, single-purpose,
@@ -164,3 +164,11 @@ reading. The `SnapshotReader` seam cleans exactly that edge.
 ## Decision
 
 Proceeding with (1) and (2) is recommended; (3) is a trap to avoid.
+
+
+## Implemented notes
+
+- `src/snapshot-reader.ts` provides both `createGitSnapshotReader` (production)
+  and `createInMemorySnapshotReader` (tests).
+- `checkSourceCommit` accepts an optional `snapshotReader` in options, so tests
+  can inject snapshots without creating temporary git repositories.
