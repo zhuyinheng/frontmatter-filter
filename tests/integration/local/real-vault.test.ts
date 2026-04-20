@@ -22,9 +22,11 @@ import {
 const FIXTURE_MANIFEST_PATH = join(PROJECT_ROOT, 'tests', 'fixtures', 'obsidian_test_vault.manifest.json');
 
 test('real vault fixture flows through install.sh and pre-push hook into the mirror target', async () => {
-  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-real-fixture-'));
-  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-real-target-'));
-  const sourceRemote = await createBareRemote('frontmatter-filter-real-source-');
+  const [repoRoot, targetRoot, sourceRemote] = await Promise.all([
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-real-fixture-')),
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-real-target-')),
+    createBareRemote('frontmatter-filter-real-source-'),
+  ]);
 
   try {
     await exportFixtureToRepo(repoRoot);
@@ -32,10 +34,12 @@ test('real vault fixture flows through install.sh and pre-push hook into the mir
     await installFrontmatterFilter(repoRoot, ['--target', targetRoot]);
 
     const pushResult = await pushOrigin(repoRoot, 'main');
-    const combinedOutput = `${pushResult.stdout}\n${pushResult.stderr}`;
     const { stdout: sourceCommitRaw } = await runGit(repoRoot, ['rev-parse', 'HEAD']);
     const sourceCommit = sourceCommitRaw.trim();
     const manifest = await readJsonFile<FixtureManifest>(FIXTURE_MANIFEST_PATH);
+    const pkg = JSON.parse(await readFile(join(PROJECT_ROOT, 'package.json'), 'utf8')) as {
+      version: string;
+    };
 
     const mirroredNote = await readFile(join(targetRoot, 'Projects', 'Launch', 'Home.md'), 'utf8');
     const mirroredMetadata = await readJsonFile<{
@@ -54,25 +58,38 @@ test('real vault fixture flows through install.sh and pre-push hook into the mir
     assert.match(mirroredNote, /Ambiguous basename: !\[\[diagram\.png\]\]/);
     assert.deepEqual(actualFiles, manifest.files);
 
-    for (const [relativePath, expectedSha] of Object.entries(manifest.sha256)) {
-      assert.equal(await sha256File(join(targetRoot, ...relativePath.split('/'))), expectedSha, relativePath);
-    }
+    await Promise.all(
+      Object.entries(manifest.sha256).map(async ([relativePath, expectedSha]) => {
+        const actualSha = await sha256File(join(targetRoot, ...relativePath.split('/')));
+        assert.equal(actualSha, expectedSha, relativePath);
+      }),
+    );
 
     assert.equal(mirroredMetadata.sourceCommit, sourceCommit);
-    assert.equal(mirroredMetadata.sourceBranch, manifest.metadata.sourceBranch);
-    assert.equal(mirroredMetadata.toolVersion, manifest.metadata.toolVersion);
+    assert.equal(mirroredMetadata.sourceBranch, manifest.sourceBranch);
+    assert.equal(
+      mirroredMetadata.toolVersion,
+      pkg.version,
+      'mirrored toolVersion must equal the current package.json version',
+    );
     assert.ok(!Number.isNaN(Date.parse(mirroredMetadata.publishedAt)));
 
-    for (const warning of manifest.warnings) {
-      assert.match(combinedOutput, new RegExp(escapeForRegExp(warning)));
-    }
+    const emittedWarnings = pushResult.stderr
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('warn: '))
+      .sort();
+    const expectedWarnings = [...manifest.warnings].sort();
+    assert.deepEqual(
+      emittedWarnings,
+      expectedWarnings,
+      'warnings on stderr must exactly match the manifest',
+    );
+    assert.match(pushResult.stdout, /mirrored \d+ files to/);
   } finally {
-    await rm(repoRoot, { recursive: true, force: true });
-    await rm(targetRoot, { recursive: true, force: true });
-    await rm(sourceRemote, { recursive: true, force: true });
+    await Promise.all([
+      rm(repoRoot, { recursive: true, force: true }),
+      rm(targetRoot, { recursive: true, force: true }),
+      rm(sourceRemote, { recursive: true, force: true }),
+    ]);
   }
 });
-
-function escapeForRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

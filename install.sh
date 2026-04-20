@@ -120,7 +120,13 @@ copy_binary() {
     require_command curl
     curl -fsSL "$BIN_URL" -o "$BIN_PATH"
   else
-    fail "No local dist/frontmatter-filter.mjs found. Re-run from a built checkout or pass --bin-url."
+    cat >&2 <<'EOF'
+error: No local dist/frontmatter-filter.mjs and no FRONTMATTER_FILTER_BIN_URL / --bin-url provided.
+To install remotely, pipe through sh with the binary URL, for example:
+  curl -fsSL https://.../install.sh | FRONTMATTER_FILTER_BIN_URL=https://.../frontmatter-filter.mjs sh -s -- --repo /path/to/repo
+Or re-run from a built checkout after `npm run build`.
+EOF
+    exit 1
   fi
 
   chmod +x "$BIN_PATH"

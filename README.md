@@ -32,6 +32,16 @@ If you run `install.sh` outside this checkout, pass a binary URL:
   --bin-url https://<host>/frontmatter-filter.mjs
 ```
 
+Remote one-shot install via `curl | sh` (reuses `--bin-url` via env):
+
+```sh
+curl -fsSL https://<host>/install.sh \
+  | FRONTMATTER_FILTER_BIN_URL=https://<host>/frontmatter-filter.mjs \
+    sh -s -- --repo /path/to/your/repo
+```
+
+`FRONTMATTER_FILTER_BIN_URL` and any `install.sh` flags (`--repo`, `--remote`, `--branch`, `--target`) can be combined. The script itself has no special mode for pipe installs — the existing `--bin-url` mechanism is reused, so the only requirement is that the URL serves the built `frontmatter-filter.mjs`.
+
 After install, commit `.githooks/` into the repository. New clones still need:
 
 ```sh

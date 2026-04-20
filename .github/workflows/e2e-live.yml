@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: e2e-live
+  group: live-github-frontmatter-filter
   cancel-in-progress: false
 
 permissions:

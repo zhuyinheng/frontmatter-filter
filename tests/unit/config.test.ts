@@ -93,6 +93,91 @@ test('resolveConfig rejects invalid sensitive regexes', async () => {
   }
 });
 
+test('resolveConfig rejects an explicit config path that does not exist', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-config-'));
+
+  try {
+    const missingConfigPath = join(repoRoot, 'missing.json');
+    const cli = makeCliOptions({ configPath: missingConfigPath });
+    await assert.rejects(() => resolveConfig(cli, repoRoot, repoRoot), ConfigError);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveConfig rejects a config file that is not a JSON object', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-config-'));
+
+  try {
+    const configPath = join(repoRoot, '.githooks', 'frontmatter-filter', '.frontmatter-filter.json');
+    await mkdir(join(repoRoot, '.githooks', 'frontmatter-filter'), { recursive: true });
+    await writeFile(configPath, '[1, 2, 3]\n');
+
+    await assert.rejects(() => resolveConfig(makeCliOptions(), repoRoot, repoRoot), ConfigError);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveConfig rejects non-string field types', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-config-'));
+
+  try {
+    const configPath = join(repoRoot, '.githooks', 'frontmatter-filter', '.frontmatter-filter.json');
+    await mkdir(join(repoRoot, '.githooks', 'frontmatter-filter'), { recursive: true });
+    await writeFile(configPath, `${JSON.stringify({ target: 123 })}\n`);
+
+    await assert.rejects(() => resolveConfig(makeCliOptions(), repoRoot, repoRoot), ConfigError);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveConfig rejects an unknown brokenLinkPolicy value', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-config-'));
+
+  try {
+    const configPath = join(repoRoot, '.githooks', 'frontmatter-filter', '.frontmatter-filter.json');
+    await mkdir(join(repoRoot, '.githooks', 'frontmatter-filter'), { recursive: true });
+    await writeFile(configPath, `${JSON.stringify({ brokenLinkPolicy: 'strict' })}\n`);
+
+    await assert.rejects(() => resolveConfig(makeCliOptions(), repoRoot, repoRoot), ConfigError);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveConfig resolves a config-relative target path against the config directory', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-config-'));
+
+  try {
+    const configDir = join(repoRoot, '.githooks', 'frontmatter-filter');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(
+      join(configDir, '.frontmatter-filter.json'),
+      `${JSON.stringify({ target: './out' })}\n`,
+    );
+
+    const config = await resolveConfig(makeCliOptions(), repoRoot, repoRoot);
+    assert.equal(config.target, join(configDir, 'out'));
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveConfig rejects an explicit --repo path that is not a directory', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-config-'));
+
+  try {
+    const filePath = join(repoRoot, 'not-a-directory');
+    await writeFile(filePath, 'placeholder');
+    const cli = makeCliOptions({ repoPath: filePath });
+    await assert.rejects(() => resolveConfig(cli, repoRoot), ConfigError);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 function makeCliOptions(overrides: Partial<CliOptions> = {}): CliOptions {
   return {
     keepStaging: false,

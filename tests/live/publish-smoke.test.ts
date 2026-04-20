@@ -20,11 +20,19 @@ const LIVE_REMOTE = process.env.E2E_LIVE_REMOTE ?? 'git@github.com:zhuyinheng/fr
 const LIVE_BRANCH = process.env.E2E_LIVE_BRANCH ?? 'live-smoke';
 const LIVE_KEY_PATH = process.env.E2E_LIVE_SSH_KEY_PATH;
 const LIVE_KNOWN_HOSTS_PATH = process.env.E2E_LIVE_KNOWN_HOSTS_PATH;
+const ALLOW_SKIP = process.env.E2E_LIVE_ALLOW_SKIP === '1';
+
+if (!LIVE_KEY_PATH && !ALLOW_SKIP) {
+  throw new Error(
+    'E2E_LIVE_SSH_KEY_PATH is required to run the live publish smoke test. ' +
+      'Set E2E_LIVE_ALLOW_SKIP=1 only when you explicitly want to skip (and understand you get no live signal).',
+  );
+}
 
 test(
   'publishes a live snapshot to the GitHub public smoke target',
   {
-    skip: LIVE_KEY_PATH ? false : 'Set E2E_LIVE_SSH_KEY_PATH to run the live publish smoke test.',
+    skip: LIVE_KEY_PATH ? false : 'Explicit skip via E2E_LIVE_ALLOW_SKIP=1.',
   },
   async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-live-source-'));

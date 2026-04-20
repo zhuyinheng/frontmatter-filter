@@ -28,12 +28,11 @@
     "Spaces/Definitions/Periapsis.md": "f7950e20eb53acc6a3e02506e6cc63e391569a80bc9f3660a149a6718b87d89c",
     "Spaces/README.md": "c88bad7de32e7dc1cab3e0a7995959797f58693c59463249d6e5dd7c8a5abdd2"
   },
-  "metadata": {
-    "sourceBranch": "main",
-    "toolVersion": "0.1.0"
-  },
+  "sourceBranch": "main",
   "warnings": [
     "warn: Skipping tracked symlink: Projects/Launch/Assets/diagram-link.png",
-    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Private/Secret Plan.md (not-public)"
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Assets/diagram-link.png (missing)",
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Private/Secret Plan.md (not-public)",
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/diagram.png (missing)"
   ]
 }

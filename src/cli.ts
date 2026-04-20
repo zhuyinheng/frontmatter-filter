@@ -1,12 +1,18 @@
 declare const __VERSION__: string | undefined;
 
 import { isAbsolute, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { resolveConfig, resolveRepoRoot } from './config.ts';
 import { checkSourceCommit, mirrorSourceCommit, publishSourceCommit } from './core.ts';
 import { parsePrePushUpdates, selectSourceCommitFromUpdates } from './git.ts';
 import type { CliOptions, MirrorResult, PublishResult, ResolvedConfig } from './types.ts';
-import { ConfigError, GitPublishError, SensitivePatternError } from './types.ts';
+import {
+  BrokenLinkPolicyError,
+  ConfigError,
+  GitPublishError,
+  SensitivePatternError,
+} from './types.ts';
 
 const VERSION = typeof __VERSION__ === 'string' ? __VERSION__ : '0.1.0';
 
@@ -141,12 +147,17 @@ export async function main(argv: string[]): Promise<number> {
       return 4;
     }
 
+    if (error instanceof BrokenLinkPolicyError) {
+      printError(error.message);
+      return 5;
+    }
+
     printError(error instanceof Error ? error.message : String(error));
     return 1;
   }
 }
 
-function parseArgs(argv: string[]): CliOptions {
+export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     keepStaging: false,
     verbose: false,
@@ -442,5 +453,11 @@ function printError(message: string): void {
   console.error(`error: ${message}`);
 }
 
-const exitCode = await main(process.argv.slice(2));
-process.exitCode = exitCode;
+const entryHref =
+  typeof process.argv[1] === 'string' && process.argv[1].length > 0
+    ? pathToFileURL(process.argv[1]).href
+    : '';
+if (entryHref === import.meta.url) {
+  const exitCode = await main(process.argv.slice(2));
+  process.exitCode = exitCode;
+}

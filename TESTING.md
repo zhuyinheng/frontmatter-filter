@@ -105,6 +105,8 @@ Required environment for local live end-to-end runs:
 - optional: `E2E_PUBLIC_LIVE_HTTPS_URL`
 - optional: `E2E_PUBLIC_LIVE_BRANCH`
 
+If the required SSH env is missing, the live tests fail loudly instead of silently skipping. This means `npm run test:live:*` cannot pass by accident: it either runs against GitHub or errors with an instructive message. To intentionally skip (e.g. during unrelated local work) set `E2E_LIVE_ALLOW_SKIP=1`; the test suite will then report the skip openly.
+
 ## CI
 
 - `.github/workflows/ci.yml`

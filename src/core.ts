@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, rmdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -21,7 +21,12 @@ import type {
   SensitiveMatch,
   SyncMetadata,
 } from './types.ts';
-import { ConfigError, GitPublishError, SensitivePatternError } from './types.ts';
+import {
+  BrokenLinkPolicyError,
+  ConfigError,
+  GitPublishError,
+  SensitivePatternError,
+} from './types.ts';
 
 const README_LOOKUP = normalizeLookupKey('README.md');
 const META_FILE_NAME = '.frontmatter-filter-meta.json';
@@ -127,9 +132,12 @@ export async function publishSourceCommit(
   config: ResolvedConfig,
   options: PublishOptions,
 ): Promise<PublishResult> {
+  const userProvidedStagingDir = options.stagingDir !== undefined;
   const stagingDir =
     options.stagingDir ?? (await mkdtemp(join(tmpdir(), 'frontmatter-filter-staging-')));
-  const shouldKeepOnSuccess = options.keepStaging;
+  // A directory the user chose is never touched — only auto-created temp dirs
+  // may be cleaned up, either on success or on pre-write errors in the catch.
+  const shouldKeepOnSuccess = options.keepStaging || userProvidedStagingDir;
 
   try {
     const mirrorResult = await mirrorSourceCommit(config, {
@@ -159,7 +167,16 @@ export async function publishSourceCommit(
       throw new GitPublishError(error.message, stagingDir);
     }
 
-    if (error instanceof ConfigError || error instanceof SensitivePatternError) {
+    if (
+      error instanceof ConfigError ||
+      error instanceof SensitivePatternError ||
+      error instanceof BrokenLinkPolicyError
+    ) {
+      // These three errors fire inside buildPublishPlan, before writeMirror
+      // touches the staging dir, so it's guaranteed empty here.
+      if (!userProvidedStagingDir) {
+        await rmdir(stagingDir);
+      }
       throw error;
     }
 
@@ -215,11 +232,7 @@ async function buildPublishPlan(
     config.brokenLinkPolicy === 'ignore' ? [] : referencedFiles.brokenLinks;
 
   if (brokenLinks.length > 0 && config.brokenLinkPolicy === 'error') {
-    throw new Error(
-      `Broken references detected:\n${brokenLinks
-        .map((link) => `  ${link.source} -> ${link.target}`)
-        .join('\n')}`,
-    );
+    throw new BrokenLinkPolicyError(brokenLinks);
   }
 
   const publishFiles: PublishAsset[] = [

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: live-publish-smoke
+  group: live-github-frontmatter-filter
   cancel-in-progress: false
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
       - name: Run Live Publish Smoke
         env:
           E2E_LIVE_REMOTE: git@github.com:zhuyinheng/frontmatter-filter-live.git
-          E2E_LIVE_BRANCH: live-smoke
+          E2E_LIVE_BRANCH: publish-smoke
           E2E_LIVE_SSH_KEY_PATH: ${{ runner.temp }}/frontmatter-filter-live/id_ed25519
           E2E_LIVE_KNOWN_HOSTS_PATH: ${{ runner.temp }}/frontmatter-filter-live/known_hosts
         run: npm run test:live:publish-smoke

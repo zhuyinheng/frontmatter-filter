@@ -14,10 +14,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch Fixture Vault Over HTTPS
+      - name: Fetch Fixture Vault Over HTTPS At Pinned Commit
         run: |
+          set -eu
+          PIN="$(cat tests/fixtures/obsidian_test_vault.lock | tr -d '\n\r ')"
+          if [ -z "$PIN" ]; then
+            echo "::error::tests/fixtures/obsidian_test_vault.lock is empty"
+            exit 1
+          fi
           rm -rf tests/fixtures/obsidian_test_vault
           git clone https://github.com/zhuyinheng/obsidian_test_vault.git tests/fixtures/obsidian_test_vault
+          git -C tests/fixtures/obsidian_test_vault fetch --depth 1 origin "$PIN"
+          git -C tests/fixtures/obsidian_test_vault -c advice.detachedHead=false checkout "$PIN"
+          echo "Fixture vault pinned at $PIN"
 
       - name: Setup Node
         uses: actions/setup-node@v4

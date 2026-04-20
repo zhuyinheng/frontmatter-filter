@@ -136,3 +136,16 @@ export class GitPublishError extends Error {
     this.stagingDir = stagingDir;
   }
 }
+
+export class BrokenLinkPolicyError extends Error {
+  readonly brokenLinks: BrokenLink[];
+
+  constructor(brokenLinks: BrokenLink[]) {
+    const body = brokenLinks
+      .map((link) => `  ${link.source} -> ${link.target} (${link.reason})`)
+      .join('\n');
+    super(`Broken references detected:\n${body}`);
+    this.name = 'BrokenLinkPolicyError';
+    this.brokenLinks = brokenLinks;
+  }
+}

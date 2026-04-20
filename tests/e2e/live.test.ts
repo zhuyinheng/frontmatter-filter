@@ -31,13 +31,21 @@ const PUBLIC_HTTPS_URL =
   'https://github.com/zhuyinheng/frontmatter-filter-live.git';
 const PUBLIC_BRANCH = process.env.E2E_PUBLIC_LIVE_BRANCH ?? 'live-smoke';
 const LIVE_GIT_SSH_COMMAND = process.env.E2E_LIVE_GIT_SSH_COMMAND;
+const ALLOW_SKIP = process.env.E2E_LIVE_ALLOW_SKIP === '1';
+
+if (!LIVE_GIT_SSH_COMMAND && !ALLOW_SKIP) {
+  throw new Error(
+    'E2E_LIVE_GIT_SSH_COMMAND is required to run the live end-to-end test. ' +
+      'Set E2E_LIVE_ALLOW_SKIP=1 only when you explicitly want to skip (and understand you get no live signal).',
+  );
+}
 
 test(
   'pushes to the live source remote and publishes the matching snapshot to the live public remote',
   {
     skip: LIVE_GIT_SSH_COMMAND
       ? false
-      : 'Set E2E_LIVE_GIT_SSH_COMMAND to run the live end-to-end test.',
+      : 'Explicit skip via E2E_LIVE_ALLOW_SKIP=1.',
   },
   async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-e2e-live-source-'));
