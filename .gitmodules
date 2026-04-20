@@ -1,0 +1,3 @@
+[submodule "tests/fixtures/obsidian_test_vault"]
+	path = tests/fixtures/obsidian_test_vault
+	url = git@github.com:zhuyinheng/obsidian_test_vault.git

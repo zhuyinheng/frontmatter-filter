@@ -1,0 +1,42 @@
+{
+  "name": "frontmatter-filter",
+  "version": "0.1.0",
+  "description": "Mirror a markdown tree to a target directory using strict frontmatter visibility rules.",
+  "type": "module",
+  "bin": {
+    "frontmatter-filter": "dist/frontmatter-filter.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test:unit": "node --import tsx --test tests/unit/*.test.ts",
+    "test:integration:local": "npm run build && node --import tsx --test tests/integration/local/*.test.ts",
+    "test:live:publish-smoke": "npm run build && node --import tsx --test tests/live/publish-smoke.test.ts",
+    "test:e2e:live": "npm run build && node --import tsx --test tests/e2e/live.test.ts",
+    "test": "npm run test:unit && npm run test:integration:local",
+    "ci:act": "act"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@flowershow/remark-wiki-link": "^3.4.0",
+    "remark": "^15.0.1",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "unist-util-visit": "^5.1.0",
+    "vfile": "^6.0.3",
+    "vfile-matter": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}

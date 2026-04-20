@@ -1,0 +1,66 @@
+name: E2E Live
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: Live Source-To-Public E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Prepare SSH Config
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/frontmatter-filter-live"
+          printf '%s\n' "${{ secrets.E2E_SOURCE_LIVE_SSH_KEY }}" > "$RUNNER_TEMP/frontmatter-filter-live/source_id_ed25519"
+          printf '%s\n' "${{ secrets.E2E_LIVE_SSH_KEY }}" > "$RUNNER_TEMP/frontmatter-filter-live/public_id_ed25519"
+          chmod 600 "$RUNNER_TEMP/frontmatter-filter-live/source_id_ed25519" "$RUNNER_TEMP/frontmatter-filter-live/public_id_ed25519"
+          ssh-keyscan github.com > "$RUNNER_TEMP/frontmatter-filter-live/known_hosts"
+          cat > "$RUNNER_TEMP/frontmatter-filter-live/ssh_config" <<EOF
+          Host github-source-live
+            HostName github.com
+            User git
+            IdentityFile $RUNNER_TEMP/frontmatter-filter-live/source_id_ed25519
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $RUNNER_TEMP/frontmatter-filter-live/known_hosts
+
+          Host github-public-live
+            HostName github.com
+            User git
+            IdentityFile $RUNNER_TEMP/frontmatter-filter-live/public_id_ed25519
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $RUNNER_TEMP/frontmatter-filter-live/known_hosts
+          EOF
+          chmod 600 "$RUNNER_TEMP/frontmatter-filter-live/ssh_config"
+
+      - name: Run E2E Live
+        env:
+          E2E_SOURCE_LIVE_REMOTE: git@github-source-live:zhuyinheng/obsidian_test_vault.git
+          E2E_SOURCE_LIVE_HTTPS_URL: https://github.com/zhuyinheng/obsidian_test_vault.git
+          E2E_SOURCE_LIVE_BRANCH: live-smoke
+          E2E_PUBLIC_LIVE_REMOTE: git@github-public-live:zhuyinheng/frontmatter-filter-live.git
+          E2E_PUBLIC_LIVE_HTTPS_URL: https://github.com/zhuyinheng/frontmatter-filter-live.git
+          E2E_PUBLIC_LIVE_BRANCH: live-smoke
+          E2E_LIVE_GIT_SSH_COMMAND: ssh -F ${{ runner.temp }}/frontmatter-filter-live/ssh_config
+        run: npm run test:e2e:live

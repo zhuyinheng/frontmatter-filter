@@ -1,0 +1,39 @@
+{
+  "files": [
+    ".frontmatter-filter-meta.json",
+    "Assets/Documents/mission-brief.pdf",
+    "Assets/Images/diagram.png",
+    "Assets/Images/launch-crew.jpg",
+    "Assets/Images/launch-sketch.png",
+    "Dashboard.md",
+    "Projects/Launch/Assets/diagram.png",
+    "Projects/Launch/Home.md",
+    "Projects/Launch/Notes/Meeting Notes.md",
+    "Projects/Launch/Notes/meeting-agenda.pdf",
+    "Projects/README.md",
+    "Spaces/Definitions/Periapsis.md",
+    "Spaces/README.md"
+  ],
+  "sha256": {
+    "Assets/Documents/mission-brief.pdf": "e2ca1e01b1ec8426e8e9dd99d1a56db1edb7e526aa148230d3911f761c0988f4",
+    "Assets/Images/diagram.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
+    "Assets/Images/launch-crew.jpg": "a48278513a38768ff92247972e60bc873eb361a8527cb8686a3e19c3ae1bdf9d",
+    "Assets/Images/launch-sketch.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
+    "Dashboard.md": "95eb58212a0a093dc0390f2e37e75245143e59cdb1a442c94182112b8b33bbf5",
+    "Projects/Launch/Assets/diagram.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
+    "Projects/Launch/Home.md": "e727d19cb1c305a41c41439d44bead805306ce54d9ad7ecf9b8462b2c86a8904",
+    "Projects/Launch/Notes/Meeting Notes.md": "e5257572110ffeab02b2d970b43c56d746aa35187f10433f3e13496480a3acbf",
+    "Projects/Launch/Notes/meeting-agenda.pdf": "e2ca1e01b1ec8426e8e9dd99d1a56db1edb7e526aa148230d3911f761c0988f4",
+    "Projects/README.md": "728323cb73b8b12976476d60fc81f1c731b8f00dcc194013c4996028f0dbe2a0",
+    "Spaces/Definitions/Periapsis.md": "f7950e20eb53acc6a3e02506e6cc63e391569a80bc9f3660a149a6718b87d89c",
+    "Spaces/README.md": "c88bad7de32e7dc1cab3e0a7995959797f58693c59463249d6e5dd7c8a5abdd2"
+  },
+  "metadata": {
+    "sourceBranch": "main",
+    "toolVersion": "0.1.0"
+  },
+  "warnings": [
+    "warn: Skipping tracked symlink: Projects/Launch/Assets/diagram-link.png",
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Private/Secret Plan.md (not-public)"
+  ]
+}
