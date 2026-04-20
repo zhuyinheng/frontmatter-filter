@@ -10,9 +10,12 @@ import {
   resolveCommit,
   runGit,
 } from './git.ts';
-import { parseMarkdownReferences, type MarkdownReferenceSyntax } from './references.ts';
+import {
+  planPublication,
+  type MarkdownSourceEntry,
+  type SourceFileEntry,
+} from './publication-domain.ts';
 import type {
-  BrokenLink,
   CheckResult,
   MirrorDiff,
   MirrorResult,
@@ -28,18 +31,13 @@ import {
   SensitivePatternError,
 } from './types.ts';
 
-const README_LOOKUP = normalizeLookupKey('README.md');
 const META_FILE_NAME = '.frontmatter-filter-meta.json';
 
-interface SnapshotFileEntry {
-  relativePath: string;
-  directoryRelativePath: string;
-  basename: string;
-  isMarkdown: boolean;
+interface SnapshotFileEntry extends SourceFileEntry {
   buffer?: Buffer;
 }
 
-interface MarkdownCandidate extends SnapshotFileEntry {
+interface MarkdownCandidate extends SnapshotFileEntry, MarkdownSourceEntry {
   content: string;
   parsed: ReturnType<typeof parseFrontmatter>;
 }
@@ -47,7 +45,6 @@ interface MarkdownCandidate extends SnapshotFileEntry {
 interface SnapshotTree {
   markdownByPath: Map<string, MarkdownCandidate>;
   fileByPath: Map<string, SnapshotFileEntry>;
-  readmeByDirectory: Map<string, string>;
   warnings: string[];
 }
 
@@ -59,12 +56,6 @@ interface PublishAsset {
 
 interface PublishPlan extends CheckResult {
   files: PublishAsset[];
-}
-
-interface ReferenceResolution {
-  status: 'resolved' | 'missing' | 'ignored';
-  file?: SnapshotFileEntry;
-  target: string;
 }
 
 interface CheckOptions {
@@ -194,42 +185,15 @@ async function buildPublishPlan(
   const sourceCommit = await resolveCommit(config.repoRoot, options.sourceCommit ?? 'HEAD');
   const sourceBranch = options.sourceBranch ?? (await getCurrentBranch(config.repoRoot));
   const sourceTree = await collectSourceTree(config.repoRoot, sourceCommit);
-  const warnings = [...sourceTree.warnings];
-
-  for (const candidate of sourceTree.markdownByPath.values()) {
-    warnings.push(
-      ...candidate.parsed.warnings.map((warning) => `${candidate.relativePath}: ${warning}`),
-    );
-  }
-
-  const visibilityCache = new Map<string, boolean>();
-  const publishedMarkdown = Array.from(sourceTree.markdownByPath.values())
-    .filter((candidate) =>
-      resolveEffectiveVisibility(
-        candidate,
-        sourceTree.markdownByPath,
-        sourceTree.readmeByDirectory,
-        visibilityCache,
-      ),
-    )
-    .sort((left, right) => comparePaths(left.relativePath, right.relativePath));
-
-  const publishedMarkdownKeys = new Set(
-    publishedMarkdown.map((candidate) => normalizeLookupKey(candidate.relativePath)),
-  );
-
-  const referencedFiles = collectReferencedFiles(
-    publishedMarkdown,
-    sourceTree.fileByPath,
-    publishedMarkdownKeys,
-  );
-  warnings.push(...referencedFiles.warnings);
-
-  const attachmentFiles = referencedFiles.attachments.sort((left, right) =>
-    comparePaths(left.relativePath, right.relativePath),
-  );
-  const brokenLinks =
-    config.brokenLinkPolicy === 'ignore' ? [] : referencedFiles.brokenLinks;
+  const domainPlan = planPublication({
+    markdownCandidates: Array.from(sourceTree.markdownByPath.values()),
+    fileEntries: Array.from(sourceTree.fileByPath.values()),
+    brokenLinkPolicy: config.brokenLinkPolicy,
+  });
+  const warnings = [...sourceTree.warnings, ...domainPlan.warnings];
+  const publishedMarkdown = domainPlan.publishedMarkdown;
+  const attachmentFiles = domainPlan.attachments;
+  const brokenLinks = domainPlan.brokenLinks;
 
   if (brokenLinks.length > 0 && config.brokenLinkPolicy === 'error') {
     throw new BrokenLinkPolicyError(brokenLinks);
@@ -289,7 +253,6 @@ async function buildPublishPlan(
 async function collectSourceTree(repoRoot: string, sourceCommit: string): Promise<SnapshotTree> {
   const markdownByPath = new Map<string, MarkdownCandidate>();
   const fileByPath = new Map<string, SnapshotFileEntry>();
-  const readmeByDirectory = new Map<string, string>();
   const warnings: string[] = [];
   const entries = await listCommitTree(repoRoot, sourceCommit);
 
@@ -333,268 +296,13 @@ async function collectSourceTree(repoRoot: string, sourceCommit: string): Promis
     };
 
     markdownByPath.set(normalizeLookupKey(relativePath), markdownCandidate);
-
-    if (normalizeLookupKey(markdownCandidate.basename) === README_LOOKUP) {
-      const existing = readmeByDirectory.get(normalizeLookupKey(markdownCandidate.directoryRelativePath));
-      if (!existing || markdownCandidate.basename === 'README.md') {
-        readmeByDirectory.set(
-          normalizeLookupKey(markdownCandidate.directoryRelativePath),
-          markdownCandidate.relativePath,
-        );
-      }
-    }
   }
 
   return {
     markdownByPath,
     fileByPath,
-    readmeByDirectory,
     warnings,
   };
-}
-
-function resolveEffectiveVisibility(
-  candidate: MarkdownCandidate,
-  markdownByPath: Map<string, MarkdownCandidate>,
-  readmeByDirectory: Map<string, string>,
-  cache: Map<string, boolean>,
-): boolean {
-  const key = normalizeLookupKey(candidate.relativePath);
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  if (candidate.parsed.publicValue !== undefined) {
-    cache.set(key, candidate.parsed.publicValue);
-    return candidate.parsed.publicValue;
-  }
-
-  let currentDirectory = candidate.directoryRelativePath;
-  while (true) {
-    const readmePath = readmeByDirectory.get(normalizeLookupKey(currentDirectory));
-    if (readmePath && normalizeLookupKey(readmePath) !== key) {
-      const readme = markdownByPath.get(normalizeLookupKey(readmePath));
-      if (readme?.parsed.publicValue !== undefined) {
-        cache.set(key, readme.parsed.publicValue);
-        return readme.parsed.publicValue;
-      }
-    }
-
-    if (currentDirectory === '') {
-      break;
-    }
-    currentDirectory = dirname(currentDirectory) === '.' ? '' : dirname(currentDirectory);
-  }
-
-  cache.set(key, false);
-  return false;
-}
-
-function collectReferencedFiles(
-  publishedMarkdown: MarkdownCandidate[],
-  fileByPath: Map<string, SnapshotFileEntry>,
-  publishedMarkdownKeys: Set<string>,
-): { attachments: SnapshotFileEntry[]; brokenLinks: BrokenLink[]; warnings: string[] } {
-  const attachments = new Map<string, SnapshotFileEntry>();
-  const brokenLinks = new Map<string, BrokenLink>();
-  const warnings: string[] = [];
-  const basenameIndex = buildFileBasenameIndex(fileByPath);
-
-  for (const candidate of publishedMarkdown) {
-    const parsedReferences = parseMarkdownReferences(candidate.content);
-    warnings.push(
-      ...parsedReferences.warnings.map((warning) => `${candidate.relativePath}: ${warning}`),
-    );
-
-    for (const reference of parsedReferences.references) {
-      const resolution = resolveReferenceTarget(
-        candidate.relativePath,
-        reference.rawTarget,
-        reference.syntax,
-        fileByPath,
-        basenameIndex,
-      );
-
-      if (resolution.status === 'ignored') {
-        continue;
-      }
-
-      if (resolution.status === 'missing' || !resolution.file) {
-        addBrokenLink(candidate.relativePath, resolution.target, 'missing');
-        continue;
-      }
-
-      if (resolution.file.isMarkdown) {
-        if (!publishedMarkdownKeys.has(normalizeLookupKey(resolution.file.relativePath))) {
-          addBrokenLink(candidate.relativePath, resolution.file.relativePath, 'not-public');
-        }
-        continue;
-      }
-
-      attachments.set(normalizeLookupKey(resolution.file.relativePath), resolution.file);
-    }
-  }
-
-  return {
-    attachments: Array.from(attachments.values()),
-    brokenLinks: Array.from(brokenLinks.values()).sort((left, right) =>
-      comparePaths(`${left.source}:${left.target}`, `${right.source}:${right.target}`),
-    ),
-    warnings,
-  };
-
-  function addBrokenLink(source: string, target: string, reason: BrokenLink['reason']): void {
-    const key = `${normalizeLookupKey(source)}->${normalizeLookupKey(target)}`;
-    if (brokenLinks.has(key)) {
-      return;
-    }
-
-    brokenLinks.set(key, {
-      source,
-      target,
-      reason,
-    });
-  }
-}
-
-function resolveReferenceTarget(
-  sourceRelativePath: string,
-  rawTarget: string,
-  syntax: MarkdownReferenceSyntax,
-  fileByPath: Map<string, SnapshotFileEntry>,
-  basenameIndex: Map<string, SnapshotFileEntry[]>,
-): ReferenceResolution {
-  const prepared = prepareReferenceTarget(rawTarget, syntax);
-  if (!prepared) {
-    return {
-      status: 'ignored',
-      target: rawTarget,
-    };
-  }
-
-  const candidates = buildReferenceCandidates(sourceRelativePath, prepared.path, syntax);
-  for (const candidate of candidates) {
-    const file = fileByPath.get(normalizeLookupKey(candidate));
-    if (file) {
-      return {
-        status: 'resolved',
-        file,
-        target: file.relativePath,
-      };
-    }
-  }
-
-  if (prepared.allowBasenameFallback) {
-    const basenameMatches = basenameIndex.get(normalizeLookupKey(prepared.basenameKey)) ?? [];
-    if (basenameMatches.length === 1) {
-      return {
-        status: 'resolved',
-        file: basenameMatches[0],
-        target: basenameMatches[0].relativePath,
-      };
-    }
-  }
-
-  return {
-    status: 'missing',
-    target: candidates[0] ?? prepared.path.replace(/^\/+/, ''),
-  };
-}
-
-function prepareReferenceTarget(
-  rawTarget: string,
-  syntax: MarkdownReferenceSyntax,
-): { path: string; basenameKey: string; allowBasenameFallback: boolean } | undefined {
-  let target = rawTarget.trim();
-  if (target.length === 0) {
-    return undefined;
-  }
-
-  if (syntax === 'link' || syntax === 'image' || syntax === 'linkReference' || syntax === 'imageReference') {
-    target = trimAngleBrackets(target);
-    if (isIgnoredUrl(target)) {
-      return undefined;
-    }
-    target = safelyDecode(target);
-    target = stripQueryAndHash(target);
-  } else {
-    target = stripHeadingFragment(target);
-  }
-
-  target = target.trim().replace(/\\/g, '/');
-  if (target.length === 0 || target === '.' || target === '..') {
-    return undefined;
-  }
-
-  const withoutLeadingSlash = target.replace(/^\/+/, '');
-  if (withoutLeadingSlash.length === 0) {
-    return undefined;
-  }
-
-  return {
-    path: target,
-    basenameKey: basename(withoutLeadingSlash),
-    allowBasenameFallback: syntax === 'wikilink' || syntax === 'embed',
-  };
-}
-
-function buildReferenceCandidates(
-  sourceRelativePath: string,
-  targetPath: string,
-  syntax: MarkdownReferenceSyntax,
-): string[] {
-  const candidates = new Set<string>();
-  const sourceDirectory = dirname(sourceRelativePath) === '.' ? '' : dirname(sourceRelativePath);
-  const normalizedTargetPath = targetPath.replace(/^\/+/, '');
-  const isRootRelative = targetPath.startsWith('/');
-
-  const addCandidate = (candidate: string | undefined): void => {
-    if (!candidate) {
-      return;
-    }
-
-    candidates.add(candidate);
-    if (extname(candidate) === '') {
-      candidates.add(`${candidate}.md`);
-    }
-  };
-
-  if (isRootRelative) {
-    addCandidate(normalizeRelativePosix(normalizedTargetPath));
-    return Array.from(candidates);
-  }
-
-  if (syntax === 'wikilink' || syntax === 'embed') {
-    addCandidate(normalizeRelativePosix(joinPosix(sourceDirectory, normalizedTargetPath)));
-    addCandidate(normalizeRelativePosix(normalizedTargetPath));
-    return Array.from(candidates);
-  }
-
-  addCandidate(normalizeRelativePosix(joinPosix(sourceDirectory, normalizedTargetPath)));
-  return Array.from(candidates);
-}
-
-function buildFileBasenameIndex(
-  fileByPath: Map<string, SnapshotFileEntry>,
-): Map<string, SnapshotFileEntry[]> {
-  const basenameIndex = new Map<string, SnapshotFileEntry[]>();
-
-  for (const file of fileByPath.values()) {
-    addKey(file.basename, file);
-    if (file.isMarkdown) {
-      addKey(file.basename.replace(/\.md$/i, ''), file);
-    }
-  }
-
-  return basenameIndex;
-
-  function addKey(key: string, file: SnapshotFileEntry): void {
-    const normalizedKey = normalizeLookupKey(key);
-    const matches = basenameIndex.get(normalizedKey) ?? [];
-    matches.push(file);
-    basenameIndex.set(normalizedKey, matches);
-  }
 }
 
 function scanSensitivePatterns(publishFiles: PublishAsset[], patterns: string[]): SensitiveMatch[] {
@@ -766,55 +474,6 @@ function normalizeRelativePosix(path: string): string | undefined {
   }
 
   return parts.join('/');
-}
-
-function joinPosix(left: string, right: string): string {
-  if (!left) {
-    return right;
-  }
-  if (!right) {
-    return left;
-  }
-  return `${left}/${right}`;
-}
-
-function stripHeadingFragment(target: string): string {
-  const aliasIndex = target.indexOf('|');
-  const headingIndex = target.indexOf('#');
-  const cutIndex =
-    aliasIndex >= 0 && headingIndex >= 0
-      ? Math.min(aliasIndex, headingIndex)
-      : Math.max(aliasIndex, headingIndex);
-  return cutIndex >= 0 ? target.slice(0, cutIndex) : target;
-}
-
-function trimAngleBrackets(target: string): string {
-  if (target.startsWith('<') && target.endsWith('>')) {
-    return target.slice(1, -1);
-  }
-  return target;
-}
-
-function stripQueryAndHash(target: string): string {
-  const hashIndex = target.indexOf('#');
-  const queryIndex = target.indexOf('?');
-  const cutIndex =
-    hashIndex >= 0 && queryIndex >= 0
-      ? Math.min(hashIndex, queryIndex)
-      : Math.max(hashIndex, queryIndex);
-  return cutIndex >= 0 ? target.slice(0, cutIndex) : target;
-}
-
-function safelyDecode(target: string): string {
-  try {
-    return decodeURI(target);
-  } catch {
-    return target;
-  }
-}
-
-function isIgnoredUrl(target: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target);
 }
 
 function comparePaths(left: string, right: string): number {
