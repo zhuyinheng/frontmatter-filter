@@ -13,10 +13,11 @@
   ],
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "prepare-fixture": "node scripts/prepare-fixture.mjs",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
-    "test:integration:local": "npm run build && node --import tsx --test tests/integration/local/*.test.ts",
-    "test:live:publish-smoke": "npm run build && node --import tsx --test tests/live/publish-smoke.test.ts",
-    "test:e2e:live": "npm run build && node --import tsx --test tests/e2e/live.test.ts",
+    "test:integration:local": "npm run build && npm run prepare-fixture && node --import tsx --test tests/integration/local/*.test.ts",
+    "test:live:publish-smoke": "npm run build && npm run prepare-fixture && node --import tsx --test tests/live/publish-smoke.test.ts",
+    "test:e2e:live": "npm run build && npm run prepare-fixture && node --import tsx --test tests/e2e/live.test.ts",
     "test": "npm run test:unit && npm run test:integration:local",
     "ci:act": "act"
   },

@@ -55,9 +55,10 @@ Weaknesses that matter for TDD:
    `tests/unit/core.test.ts`: all 20+ tests call `initRepo` → `writeFile` →
    `commitAll`. This is slow, OS-dependent (git on Windows, permission
    models), and buries the actual behavior under setup noise.
-3. **The vault fixture lives in a submodule**, requiring an extra sync step
-   locally and CI. Once we fetch via HTTPS, we still need a way to run rule
-   tests against synthetic trees without spinning up git at all.
+3. **The vault fixture is fetched over HTTPS at a pinned commit**. That
+   removes the old submodule sync friction, but the rule tests still spin
+   up real git repos for every case — we still need a way to run them
+   against synthetic trees without git at all.
 
 ## The proposed seam
 

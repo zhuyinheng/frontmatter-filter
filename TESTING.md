@@ -68,6 +68,22 @@ For the real vault fixture, success means:
 - metadata points back to the exact source commit
 - expected warnings are emitted
 
+#### Fixture provisioning
+
+The fixture lives in the external repo `zhuyinheng/obsidian_test_vault`; it is
+not a git submodule. The pinned commit is in
+`tests/fixtures/obsidian_test_vault.lock`.
+
+`npm run prepare-fixture` clones it over HTTPS into
+`tests/fixtures/obsidian_test_vault/` (gitignored) and checks out that
+commit. It is idempotent: if the clone exists at the correct pin, it does
+nothing; if the pin is stale or the directory is missing, it wipes and
+re-clones. `test:integration:local`, `test:live:publish-smoke`, and
+`test:e2e:live` all run it automatically. CI uses the same script.
+
+Override the remote URL with `FRONTMATTER_FILTER_FIXTURE_REPO_URL` (used by
+`tests/integration/local/fixture-fetch.test.ts` against a local bare repo).
+
 ## Commands
 
 ```sh

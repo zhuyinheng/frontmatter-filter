@@ -85,14 +85,14 @@ frontmatter-filter sync [--repo <path>] [--config <path>] [--source-commit <oid>
 
 ```sh
 npm install
-git submodule update --init --recursive
+npm run prepare-fixture      # optional; integration tests auto-run this
 npm run test:unit
 npm run test:integration:local
 npm test
 ./node_modules/.bin/tsc --noEmit
 ```
 
-The local integration fixture uses the `obsidian_test_vault` submodule at `tests/fixtures/obsidian_test_vault`, with expected output defined in `tests/fixtures/obsidian_test_vault.manifest.json`.
+The local integration fixture is an external repo, `zhuyinheng/obsidian_test_vault`, pinned by `tests/fixtures/obsidian_test_vault.lock`. `npm run prepare-fixture` (or any integration test helper that calls `fetchFixtureRepo`) clones it over HTTPS into `tests/fixtures/obsidian_test_vault/` at the pinned commit. The directory is gitignored. If the pin changes, the next run wipes and re-checks out automatically. Expected output is defined in `tests/fixtures/obsidian_test_vault.manifest.json`.
 
 The test matrix is documented in [TESTING.md](TESTING.md).
 

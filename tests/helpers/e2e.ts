@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -13,11 +13,8 @@ export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..
 export const INSTALL_SCRIPT = join(PROJECT_ROOT, 'install.sh');
 export const DIST_BINARY = join(PROJECT_ROOT, 'dist', 'frontmatter-filter.mjs');
 // Local clone location for the fixture vault. Not tracked by git; populated by
-// fetchFixtureRepo() on demand. CI does the same thing in a pre-step.
+// scripts/prepare-fixture.mjs on demand.
 const FIXTURE_CLONE_ROOT = join(PROJECT_ROOT, 'tests', 'fixtures', 'obsidian_test_vault');
-const FIXTURE_REPO_URL =
-  process.env.FRONTMATTER_FILTER_FIXTURE_REPO_URL ??
-  'https://github.com/zhuyinheng/obsidian_test_vault.git';
 
 export interface FixtureManifest {
   files: string[];
@@ -214,7 +211,7 @@ export async function readFixturePinnedCommit(): Promise<string> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error(
         `Fixture pin file missing: ${FIXTURE_LOCK_PATH}. ` +
-          `Write the expected submodule commit into this file to stabilise integration tests.`,
+          `Write the expected fixture commit into this file to stabilise integration tests.`,
       );
     }
     throw error;
@@ -233,50 +230,26 @@ export async function exportFixtureToRepo(repoRoot: string, commitMessage = 'fix
   await commitAll(repoRoot, commitMessage);
 }
 
+const PREPARE_FIXTURE_SCRIPT = join(PROJECT_ROOT, 'scripts', 'prepare-fixture.mjs');
+
 let fixtureFetch: Promise<string> | undefined;
 
-// Fetches the vault fixture at the pinned commit into FIXTURE_CLONE_ROOT and
-// returns that path. Idempotent: if the clone already exists at the correct pin,
-// it is left alone. If it exists at a wrong pin, it is wiped and re-cloned.
+// Ensures the vault fixture is checked out at the pinned commit and returns
+// its path. Delegates to scripts/prepare-fixture.mjs so CI and local dev share
+// exactly one implementation of the fetch logic. Cached per-process so tests
+// only pay the fork cost once.
 export function fetchFixtureRepo(): Promise<string> {
   if (!fixtureFetch) {
     fixtureFetch = (async () => {
-      const pin = await readFixturePinnedCommit();
-
-      const existingHead = await readGitHeadIfPresent(FIXTURE_CLONE_ROOT);
-      if (existingHead === pin) {
-        return FIXTURE_CLONE_ROOT;
-      }
-
-      // Either missing or at a stale pin: discard and re-clone. The directory
-      // is not tracked by the outer repo (see .gitignore), so this is safe.
-      await rm(FIXTURE_CLONE_ROOT, { recursive: true, force: true });
-      await mkdir(FIXTURE_CLONE_ROOT, { recursive: true });
-      await execFileAsync('git', ['init', '--quiet'], { cwd: FIXTURE_CLONE_ROOT });
-      await execFileAsync('git', ['remote', 'add', 'origin', FIXTURE_REPO_URL], {
-        cwd: FIXTURE_CLONE_ROOT,
+      await execFileAsync('node', [PREPARE_FIXTURE_SCRIPT], {
+        cwd: PROJECT_ROOT,
+        env: process.env,
+        maxBuffer: 4 * 1024 * 1024,
       });
-      await execFileAsync('git', ['fetch', '--depth', '1', 'origin', pin], {
-        cwd: FIXTURE_CLONE_ROOT,
-      });
-      await execFileAsync(
-        'git',
-        ['-c', 'advice.detachedHead=false', 'checkout', pin],
-        { cwd: FIXTURE_CLONE_ROOT },
-      );
       return FIXTURE_CLONE_ROOT;
     })();
   }
   return fixtureFetch;
-}
-
-async function readGitHeadIfPresent(repoRoot: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot });
-    return stdout.trim();
-  } catch {
-    return undefined;
-  }
 }
 
 export async function runGit(
