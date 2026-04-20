@@ -2,31 +2,37 @@
   "files": [
     ".frontmatter-filter-meta.json",
     "Assets/Documents/mission-brief.pdf",
+    "Assets/Documents/report.pdf",
     "Assets/Images/diagram.png",
     "Assets/Images/launch-crew.jpg",
     "Assets/Images/launch-sketch.png",
     "Dashboard.md",
+    "Projects/Archived/Rediscovered.md",
     "Projects/Launch/Assets/diagram.png",
     "Projects/Launch/Home.md",
     "Projects/Launch/Notes/Meeting Notes.md",
     "Projects/Launch/Notes/meeting-agenda.pdf",
     "Projects/README.md",
+    "Spaces/Deep/Nested/Note.md",
     "Spaces/Definitions/Periapsis.md",
     "Spaces/README.md"
   ],
   "sha256": {
-    "Assets/Documents/mission-brief.pdf": "e2ca1e01b1ec8426e8e9dd99d1a56db1edb7e526aa148230d3911f761c0988f4",
-    "Assets/Images/diagram.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
-    "Assets/Images/launch-crew.jpg": "a48278513a38768ff92247972e60bc873eb361a8527cb8686a3e19c3ae1bdf9d",
-    "Assets/Images/launch-sketch.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
-    "Dashboard.md": "95eb58212a0a093dc0390f2e37e75245143e59cdb1a442c94182112b8b33bbf5",
-    "Projects/Launch/Assets/diagram.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
-    "Projects/Launch/Home.md": "e727d19cb1c305a41c41439d44bead805306ce54d9ad7ecf9b8462b2c86a8904",
-    "Projects/Launch/Notes/Meeting Notes.md": "e5257572110ffeab02b2d970b43c56d746aa35187f10433f3e13496480a3acbf",
-    "Projects/Launch/Notes/meeting-agenda.pdf": "e2ca1e01b1ec8426e8e9dd99d1a56db1edb7e526aa148230d3911f761c0988f4",
-    "Projects/README.md": "728323cb73b8b12976476d60fc81f1c731b8f00dcc194013c4996028f0dbe2a0",
-    "Spaces/Definitions/Periapsis.md": "f7950e20eb53acc6a3e02506e6cc63e391569a80bc9f3660a149a6718b87d89c",
-    "Spaces/README.md": "c88bad7de32e7dc1cab3e0a7995959797f58693c59463249d6e5dd7c8a5abdd2"
+    "Assets/Documents/mission-brief.pdf": "58206c18940e7b9718e690abc2b7dbb78e7370358b1fbcb6bc2c14e37409ce8b",
+    "Assets/Documents/report.pdf": "0f4ddf0b70c1276f6cd6cd8cb00ee58b7e5a1bea220b733039d0b0b9e3949772",
+    "Assets/Images/diagram.png": "09824c6bec844d272dd1a01cd876409dfaf7b650d0ec2fc2e88a1e6a8596f762",
+    "Assets/Images/launch-crew.jpg": "780806275d97563cce1485a1bd48f4398ca42c7d0cf279b63d00a4a67ab7cd43",
+    "Assets/Images/launch-sketch.png": "19ed57bd94881e1149f7fd0a7439e1ddc58702bfdc40b63793a2b6392a3cc818",
+    "Dashboard.md": "9d3c31dfe6953065b41e982fe4bbb625e46a4dedf3edd979d9de32a702533d38",
+    "Projects/Archived/Rediscovered.md": "ae9799ffb1ae7497cc4da47101022467aae51104ae1a9b6e5450a0e7021f8b2e",
+    "Projects/Launch/Assets/diagram.png": "b30aafd3f426a89e1c3f1ad77ce6b3944a5e54efe62280814e80ab365f952125",
+    "Projects/Launch/Home.md": "e77f9c72d0aace9a14a43705afc6cb936a43022234a3c124371be0e1df25848d",
+    "Projects/Launch/Notes/Meeting Notes.md": "09ff34f3bbe3e77dc0df6c6608b9c46137aabcbebdc42da8dd495e36b5fe01c3",
+    "Projects/Launch/Notes/meeting-agenda.pdf": "d936c0b8b83f52c815953b7ee43de540091d8b77a02756142605f53409e63047",
+    "Projects/README.md": "89b9016c624be2c1bd189cdf6fab4d6dc59ee69515c8eb98df81e7b0d2df59dc",
+    "Spaces/Deep/Nested/Note.md": "68fe41c3306d8f7b277924d998e293349a6fc1fdd6212d7be3f0de2781a7dd9e",
+    "Spaces/Definitions/Periapsis.md": "50e0ab48e099f97556005d516e06b9e3e08066e17d7cf81dd518dc43630f10fb",
+    "Spaces/README.md": "5bf718c966e2fcd1698e36fb355fbb82334f4800ace05352d5718f159ea2e63d"
   },
   "metadata": {
     "sourceBranch": "main",
@@ -34,6 +40,9 @@
   },
   "warnings": [
     "warn: Skipping tracked symlink: Projects/Launch/Assets/diagram-link.png",
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Archived/Old Note.md (not-public)",
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/diagram.png (missing)",
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/NonExistent Note (missing)",
     "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Private/Secret Plan.md (not-public)"
   ]
 }
