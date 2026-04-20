@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -12,7 +12,12 @@ const execFileAsync = promisify(execFile);
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const INSTALL_SCRIPT = join(PROJECT_ROOT, 'install.sh');
 export const DIST_BINARY = join(PROJECT_ROOT, 'dist', 'frontmatter-filter.mjs');
-export const FIXTURE_REPO_ROOT = join(PROJECT_ROOT, 'tests', 'fixtures', 'obsidian_test_vault');
+// Local clone location for the fixture vault. Not tracked by git; populated by
+// fetchFixtureRepo() on demand. CI does the same thing in a pre-step.
+const FIXTURE_CLONE_ROOT = join(PROJECT_ROOT, 'tests', 'fixtures', 'obsidian_test_vault');
+const FIXTURE_REPO_URL =
+  process.env.FRONTMATTER_FILTER_FIXTURE_REPO_URL ??
+  'https://github.com/zhuyinheng/obsidian_test_vault.git';
 
 export interface FixtureManifest {
   files: string[];
@@ -217,47 +222,61 @@ export async function readFixturePinnedCommit(): Promise<string> {
 }
 
 export async function exportFixtureToRepo(repoRoot: string, commitMessage = 'fixture snapshot'): Promise<void> {
-  await assertFixtureAtPin();
+  const fixtureRoot = await fetchFixtureRepo();
   const archivePath = join(dirname(repoRoot), 'fixture.tar');
   await mkdir(repoRoot, { recursive: true });
   await execFileAsync('git', ['archive', '--format=tar', 'HEAD', '-o', archivePath], {
-    cwd: FIXTURE_REPO_ROOT,
+    cwd: fixtureRoot,
   });
   await execFileAsync('tar', ['-xf', archivePath, '-C', repoRoot]);
   await initRepo(repoRoot);
   await commitAll(repoRoot, commitMessage);
 }
 
-let fixturePinCheck: Promise<void> | undefined;
+let fixtureFetch: Promise<string> | undefined;
 
-function assertFixtureAtPin(): Promise<void> {
-  if (!fixturePinCheck) {
-    fixturePinCheck = (async () => {
+// Fetches the vault fixture at the pinned commit into FIXTURE_CLONE_ROOT and
+// returns that path. Idempotent: if the clone already exists at the correct pin,
+// it is left alone. If it exists at a wrong pin, it is wiped and re-cloned.
+export function fetchFixtureRepo(): Promise<string> {
+  if (!fixtureFetch) {
+    fixtureFetch = (async () => {
       const pin = await readFixturePinnedCommit();
-      let head: string;
-      try {
-        const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
-          cwd: FIXTURE_REPO_ROOT,
-        });
-        head = stdout.trim();
-      } catch (error) {
-        throw new Error(
-          `Unable to read fixture submodule HEAD at ${FIXTURE_REPO_ROOT}. ` +
-            `Did you run \`git submodule update --init --recursive\`? Underlying error: ${
-              (error as Error).message
-            }`,
-        );
+
+      const existingHead = await readGitHeadIfPresent(FIXTURE_CLONE_ROOT);
+      if (existingHead === pin) {
+        return FIXTURE_CLONE_ROOT;
       }
-      if (head !== pin) {
-        throw new Error(
-          `Fixture submodule is at ${head} but the pin file expects ${pin}. ` +
-            `Either checkout the pinned commit in ${FIXTURE_REPO_ROOT} or update ${FIXTURE_LOCK_PATH} ` +
-            `(and refresh tests/fixtures/obsidian_test_vault.manifest.json accordingly).`,
-        );
-      }
+
+      // Either missing or at a stale pin: discard and re-clone. The directory
+      // is not tracked by the outer repo (see .gitignore), so this is safe.
+      await rm(FIXTURE_CLONE_ROOT, { recursive: true, force: true });
+      await mkdir(FIXTURE_CLONE_ROOT, { recursive: true });
+      await execFileAsync('git', ['init', '--quiet'], { cwd: FIXTURE_CLONE_ROOT });
+      await execFileAsync('git', ['remote', 'add', 'origin', FIXTURE_REPO_URL], {
+        cwd: FIXTURE_CLONE_ROOT,
+      });
+      await execFileAsync('git', ['fetch', '--depth', '1', 'origin', pin], {
+        cwd: FIXTURE_CLONE_ROOT,
+      });
+      await execFileAsync(
+        'git',
+        ['-c', 'advice.detachedHead=false', 'checkout', pin],
+        { cwd: FIXTURE_CLONE_ROOT },
+      );
+      return FIXTURE_CLONE_ROOT;
     })();
   }
-  return fixturePinCheck;
+  return fixtureFetch;
+}
+
+async function readGitHeadIfPresent(repoRoot: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot });
+    return stdout.trim();
+  } catch {
+    return undefined;
+  }
 }
 
 export async function runGit(

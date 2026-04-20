@@ -21,7 +21,7 @@
     "Assets/Images/launch-sketch.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
     "Dashboard.md": "95eb58212a0a093dc0390f2e37e75245143e59cdb1a442c94182112b8b33bbf5",
     "Projects/Launch/Assets/diagram.png": "c4e870d358d64ce677e958c156d0e3fba466993d8e915fc81c5dc64937a9b696",
-    "Projects/Launch/Home.md": "e727d19cb1c305a41c41439d44bead805306ce54d9ad7ecf9b8462b2c86a8904",
+    "Projects/Launch/Home.md": "7a3e5b5bff2a9c370bc3166a597f991956baf17c4c3f7eed80509fd0b5abae01",
     "Projects/Launch/Notes/Meeting Notes.md": "e5257572110ffeab02b2d970b43c56d746aa35187f10433f3e13496480a3acbf",
     "Projects/Launch/Notes/meeting-agenda.pdf": "e2ca1e01b1ec8426e8e9dd99d1a56db1edb7e526aa148230d3911f761c0988f4",
     "Projects/README.md": "728323cb73b8b12976476d60fc81f1c731b8f00dcc194013c4996028f0dbe2a0",
@@ -30,9 +30,9 @@
   },
   "sourceBranch": "main",
   "warnings": [
-    "warn: Skipping tracked symlink: Projects/Launch/Assets/diagram-link.png",
-    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Assets/diagram-link.png (missing)",
+    "warn: Skipping tracked symlink: invalid/symlink/link-to-real.png",
     "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/Private/Secret Plan.md (not-public)",
-    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/diagram.png (missing)"
+    "warn: broken reference Projects/Launch/Home.md -> Projects/Launch/diagram.png (missing)",
+    "warn: invalid/malformed-yaml/broken-yaml.md: Failed to parse YAML frontmatter: Flow sequence in block collection must be sufficiently indented and end with a ] at line 2, column 10:"
   ]
 }
