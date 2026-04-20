@@ -1,7 +1,8 @@
 declare const __VERSION__: string | undefined;
 
+import { realpathSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import { resolveConfig, resolveRepoRoot } from './config.ts';
 import { checkSourceCommit, mirrorSourceCommit, publishSourceCommit } from './core.ts';
@@ -453,11 +454,21 @@ function printError(message: string): void {
   console.error(`error: ${message}`);
 }
 
-const entryHref =
-  typeof process.argv[1] === 'string' && process.argv[1].length > 0
-    ? pathToFileURL(process.argv[1]).href
-    : '';
-if (entryHref === import.meta.url) {
+// realpathSync on both sides so this guard survives platform symlinks
+// (e.g. macOS /tmp -> /private/tmp, /var -> /private/var) that otherwise
+// make an absolute argv[1] diverge from import.meta.url.
+if (isSameFile(process.argv[1], fileURLToPath(import.meta.url))) {
   const exitCode = await main(process.argv.slice(2));
   process.exitCode = exitCode;
+}
+
+function isSameFile(argvPath: string | undefined, selfPath: string): boolean {
+  if (!argvPath) {
+    return false;
+  }
+  try {
+    return realpathSync(argvPath) === realpathSync(selfPath);
+  } catch {
+    return false;
+  }
 }

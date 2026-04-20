@@ -98,3 +98,17 @@ test('refs that are neither branches nor tags are skipped', () => {
     reason: 'No branch update found in pre-push input.',
   });
 });
+
+test('branch delete mixed with tag push skips without error', () => {
+  const updates = parsePrePushUpdates(
+    [
+      '(delete) 0000000000000000000000000000000000000000 refs/heads/old abcdef1234567890',
+      'refs/tags/v2 fedcba0987654321 refs/tags/v2 0000000000000000000000000000000000000000',
+    ].join('\n'),
+  );
+
+  assert.deepEqual(selectSourceCommitFromUpdates(updates), {
+    action: 'skip',
+    reason: 'No branch update found in pre-push input.',
+  });
+});

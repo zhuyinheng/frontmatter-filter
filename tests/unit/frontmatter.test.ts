@@ -84,3 +84,25 @@ public: null
   assert.equal(result.publicValue, undefined);
   assert.deepEqual(result.warnings, []);
 });
+
+test('empty frontmatter block has hasFrontmatter true but no publicValue', () => {
+  const result = parseFrontmatter(`---
+---
+
+Body`);
+
+  assert.equal(result.hasFrontmatter, true);
+  assert.equal(result.publicValue, undefined);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('treats integer public value as unset', () => {
+  const result = parseFrontmatter(`---
+public: 1
+---
+`);
+
+  assert.equal(result.hasFrontmatter, true);
+  assert.equal(result.publicValue, undefined);
+  assert.deepEqual(result.warnings, []);
+});

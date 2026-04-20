@@ -578,6 +578,142 @@ b no longer public`);
   }
 });
 
+test('repo where no markdown has public visibility publishes an empty set with no broken links', async () => {
+  const [repoRoot, targetRoot] = await Promise.all([
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-')),
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-target-')),
+  ]);
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'private.md'), `---
+public: false
+---
+
+Private content.`);
+    await writeFile(join(repoRoot, 'no-frontmatter.md'), `# Just a heading\n\nNo frontmatter.`);
+    await commitAll(repoRoot, 'all private');
+
+    const result = await mirrorSourceCommit(makeConfig(repoRoot, targetRoot), {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.publishedMarkdown, []);
+    assert.deepEqual(result.copiedAttachments, []);
+    assert.deepEqual(result.brokenLinks, []);
+  } finally {
+    await Promise.all([
+      rm(repoRoot, { recursive: true, force: true }),
+      rm(targetRoot, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test('URL-encoded markdown link resolves to a filename with spaces', async () => {
+  const [repoRoot, targetRoot] = await Promise.all([
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-')),
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-target-')),
+  ]);
+
+  try {
+    await initRepo(repoRoot);
+    await mkdir(join(repoRoot, 'notes'), { recursive: true });
+    await writeFile(join(repoRoot, 'notes', 'index.md'), `---
+public: true
+---
+
+See [notes](My%20Notes.md) for details.`);
+    await writeFile(join(repoRoot, 'notes', 'My Notes.md'), `---
+public: true
+---
+
+Referenced via URL-encoded path.`);
+    await commitAll(repoRoot, 'url-encoded link');
+
+    const result = await mirrorSourceCommit(makeConfig(repoRoot, targetRoot), {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.ok(result.publishedMarkdown.includes('notes/My Notes.md'));
+    assert.deepEqual(result.brokenLinks, []);
+  } finally {
+    await Promise.all([
+      rm(repoRoot, { recursive: true, force: true }),
+      rm(targetRoot, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test('external URLs, fragment-only links, and mail URIs are ignored rather than flagged as broken', async () => {
+  const [repoRoot, targetRoot] = await Promise.all([
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-')),
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-target-')),
+  ]);
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+[External](https://example.com)
+[Anchor only](#section)
+[Email](mailto:user@example.com)`);
+    await commitAll(repoRoot, 'external links');
+
+    const result = await mirrorSourceCommit(makeConfig(repoRoot, targetRoot), {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.brokenLinks, []);
+    assert.deepEqual(result.copiedAttachments, []);
+  } finally {
+    await Promise.all([
+      rm(repoRoot, { recursive: true, force: true }),
+      rm(targetRoot, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test('angle-bracket markdown link resolves an attachment whose filename contains spaces', async () => {
+  const [repoRoot, targetRoot] = await Promise.all([
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-')),
+    mkdtemp(join(tmpdir(), 'frontmatter-filter-target-')),
+  ]);
+
+  try {
+    await initRepo(repoRoot);
+    await mkdir(join(repoRoot, 'docs'), { recursive: true });
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+[Report](<docs/my report.pdf>)`);
+    await writeFile(join(repoRoot, 'docs', 'my report.pdf'), Buffer.from('pdf-bytes'));
+    await commitAll(repoRoot, 'angle bracket link');
+
+    const result = await mirrorSourceCommit(makeConfig(repoRoot, targetRoot), {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.copiedAttachments, ['docs/my report.pdf']);
+    assert.deepEqual(result.brokenLinks, []);
+  } finally {
+    await Promise.all([
+      rm(repoRoot, { recursive: true, force: true }),
+      rm(targetRoot, { recursive: true, force: true }),
+    ]);
+  }
+});
+
 test('duplicate-basename attachments are disambiguated by relative or root-relative wikilink, and the copied bytes match the selected source', async () => {
   const [repoRoot, targetRoot] = await Promise.all([
     mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-')),
