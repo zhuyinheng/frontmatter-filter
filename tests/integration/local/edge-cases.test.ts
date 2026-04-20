@@ -123,7 +123,7 @@ test('pre-push hook blocks source push when sensitive pattern is detected in a n
     // The push should fail because the hook detects the sensitive pattern
     await assert.rejects(() => pushOrigin(repoRoot, 'main'));
 
-    // The source remote should not have received the push (only the first commit was already not there)
+    // The source remote should not have received the push; secret.md should not be present
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
     const execFileAsync = promisify(execFile);
