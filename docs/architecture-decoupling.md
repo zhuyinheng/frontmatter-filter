@@ -1,6 +1,6 @@
 # Architecture & decoupling — should we add a thin seam?
 
-Status: proposal / analysis.
+Status: partially implemented (publication-domain seam added), further seam still optional.
 Audience: anyone considering where to add a boundary for test-driven development.
 
 ## The question
@@ -164,3 +164,18 @@ reading. The `SnapshotReader` seam cleans exactly that edge.
 ## Decision
 
 Proceeding with (1) and (2) is recommended; (3) is a trap to avoid.
+
+## What has now been implemented
+
+A thin "rule planning" seam now exists in code:
+
+- `src/publication-domain.ts` contains pure publication-rule logic:
+  visibility inheritance, reference resolution, attachment selection, and
+  broken-link classification.
+- `src/core.ts` now orchestrates I/O (git/fs/publish) and delegates semantic
+  rule decisions to `planPublication(...)`.
+- New unit test `tests/unit/publication-domain.test.ts` validates this seam
+  without creating a temporary git repo.
+
+This keeps behavior stable while making TDD of rule changes faster and more
+trustworthy.
