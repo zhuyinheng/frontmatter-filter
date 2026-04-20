@@ -151,6 +151,293 @@ sanitized in working tree`);
   }
 });
 
+test('publishes nothing when no markdown files have public visibility', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'private.md'), `---
+public: false
+---
+
+Private content.`);
+    await writeFile(join(repoRoot, 'no-frontmatter.md'), `# Just a heading\n\nNo frontmatter.`);
+    await commitAll(repoRoot, 'all private');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.publishedMarkdown, []);
+    assert.deepEqual(result.copiedAttachments, []);
+    assert.deepEqual(result.brokenLinks, []);
+    assert.equal(result.didWrite, true);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('explicit public:true overrides public:false inherited from parent README', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await mkdir(join(repoRoot, 'private-section'), { recursive: true });
+
+    await writeFile(join(repoRoot, 'private-section', 'README.md'), `---
+public: false
+---
+`);
+    await writeFile(join(repoRoot, 'private-section', 'secret.md'), `---
+title: Secret
+---
+
+Top secret.`);
+    await writeFile(join(repoRoot, 'private-section', 'override.md'), `---
+public: true
+---
+
+This note is explicitly public even though the directory README is private.`);
+    await commitAll(repoRoot, 'mixed visibility');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.publishedMarkdown, ['private-section/override.md']);
+    await assert.rejects(() => readFile(join(targetRoot, 'private-section', 'secret.md'), 'utf8'));
+    assert.ok(await readFile(join(targetRoot, 'private-section', 'override.md'), 'utf8'));
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('multi-hop README inheritance reaches notes without intermediate README', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await mkdir(join(repoRoot, 'section', 'level1', 'level2'), { recursive: true });
+
+    await writeFile(join(repoRoot, 'section', 'README.md'), `---
+public: true
+---
+`);
+    // No README.md in section/level1 or section/level1/level2
+    await writeFile(join(repoRoot, 'section', 'level1', 'level2', 'deep.md'), `---
+title: Deep Note
+---
+
+Inherits public from grandparent README.`);
+    await commitAll(repoRoot, 'deep inheritance');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.ok(result.publishedMarkdown.includes('section/level1/level2/deep.md'));
+    assert.ok(await readFile(join(targetRoot, 'section', 'level1', 'level2', 'deep.md'), 'utf8'));
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('brokenLinkPolicy error throws when broken references are detected', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+See [[missing-note]]`);
+    await commitAll(repoRoot, 'broken link');
+
+    const config = { ...makeConfig(repoRoot, targetRoot), brokenLinkPolicy: 'error' as const };
+
+    await assert.rejects(
+      () => mirrorSourceCommit(config, { sourceCommit: 'HEAD', toolVersion: 'test-version', targetPath: targetRoot }),
+      /Broken references detected/,
+    );
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('brokenLinkPolicy ignore suppresses broken reference reporting', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+See [[missing-note]]`);
+    await commitAll(repoRoot, 'broken link ignored');
+
+    const config = { ...makeConfig(repoRoot, targetRoot), brokenLinkPolicy: 'ignore' as const };
+
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.brokenLinks, []);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('second mirror run reports no new content changes when source has not changed', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+Stable content.`);
+    await commitAll(repoRoot, 'stable');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const options = { sourceCommit: 'HEAD', toolVersion: 'test-version', targetPath: targetRoot };
+
+    const first = await mirrorSourceCommit(config, options);
+    assert.equal(first.didWrite, true);
+    assert.ok(first.diff.added.includes('note.md'));
+
+    const second = await mirrorSourceCommit(config, options);
+    // The metadata file timestamp changes each run so diff.changed will include it,
+    // but no content files should be added or deleted.
+    assert.deepEqual(second.diff.added, []);
+    assert.deepEqual(second.diff.deleted, []);
+    assert.deepEqual(second.publishedMarkdown, ['note.md']);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('URL-encoded relative link resolves to the correct file', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await mkdir(join(repoRoot, 'notes'), { recursive: true });
+
+    await writeFile(join(repoRoot, 'notes', 'index.md'), `---
+public: true
+---
+
+See [notes](My%20Notes.md) for details.`);
+    await writeFile(join(repoRoot, 'notes', 'My Notes.md'), `---
+public: true
+---
+
+Referenced via URL-encoded path.`);
+    await commitAll(repoRoot, 'url-encoded link');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.ok(result.publishedMarkdown.includes('notes/My Notes.md'));
+    assert.deepEqual(result.brokenLinks, []);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('external URLs and anchor-only links are not treated as broken references', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+[External](https://example.com)
+[Anchor only](#section)
+[Email](mailto:user@example.com)`);
+    await commitAll(repoRoot, 'external links');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.brokenLinks, []);
+    assert.deepEqual(result.copiedAttachments, []);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('angle-bracket link resolves attachment with spaces in filename', async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-repo-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'frontmatter-filter-target-'));
+
+  try {
+    await initRepo(repoRoot);
+    await mkdir(join(repoRoot, 'docs'), { recursive: true });
+
+    await writeFile(join(repoRoot, 'note.md'), `---
+public: true
+---
+
+[Report](<docs/my report.pdf>)`);
+    await writeFile(join(repoRoot, 'docs', 'my report.pdf'), Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00]));
+    await commitAll(repoRoot, 'angle bracket link');
+
+    const config = makeConfig(repoRoot, targetRoot);
+    const result = await mirrorSourceCommit(config, {
+      sourceCommit: 'HEAD',
+      toolVersion: 'test-version',
+      targetPath: targetRoot,
+    });
+
+    assert.deepEqual(result.copiedAttachments, ['docs/my report.pdf']);
+    assert.deepEqual(result.brokenLinks, []);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
 function makeConfig(repoRoot: string, targetRoot: string): ResolvedConfig {
   return {
     repoRoot,
@@ -184,3 +471,4 @@ async function getHeadCommit(repoRoot: string): Promise<string> {
 async function runGit(repoRoot: string, args: string[]): Promise<void> {
   await execFileAsync('git', args, { cwd: repoRoot });
 }
+
